@@ -22,17 +22,41 @@ app.get("/foods/search", async (req, res, next) => {
     const offset = Math.max(Number(req.query.offset) || 0, 0);
 
     const db = await getDb();
-    const cursor = db.collection("foods")
-      .find(
-        { $text: { $search: q } },
-        { projection: { score: { $meta: "textScore" }, name: 1, brand: 1, category: 1,
-                        source: 1, source_id: 1, upc: 1, serving: 1, per_100g: 1 } }
-      )
-      .sort({ score: { $meta: "textScore" } })
-      .skip(offset)
-      .limit(limit);
+    let docs;
 
-    const docs = await cursor.toArray();
+    try {
+      // Atlas Search — index doesn't count toward M0 storage quota
+      docs = await db.collection("foods").aggregate([
+        {
+          $search: {
+            index: "foods_search",
+            compound: {
+              should: [
+                { text: { query: q, path: "name",  score: { boost: { value: 10 } } } },
+                { text: { query: q, path: "brand", score: { boost: { value: 5  } } } },
+              ],
+            },
+          },
+        },
+        { $skip: offset },
+        { $limit: limit },
+        { $project: { score: { $meta: "searchScore" }, name: 1, brand: 1, category: 1,
+                      source: 1, source_id: 1, upc: 1, serving: 1, per_100g: 1 } },
+      ]).toArray();
+    } catch {
+      // Fallback: $text index for local dev
+      docs = await db.collection("foods")
+        .find(
+          { $text: { $search: q } },
+          { projection: { score: { $meta: "textScore" }, name: 1, brand: 1, category: 1,
+                          source: 1, source_id: 1, upc: 1, serving: 1, per_100g: 1 } }
+        )
+        .sort({ score: { $meta: "textScore" } })
+        .skip(offset)
+        .limit(limit)
+        .toArray();
+    }
+
     res.json({ q, count: docs.length, results: docs.map(cleanFood) });
   } catch (e) { next(e); }
 });
