@@ -15,7 +15,8 @@
     "migrate:normalize-upc": "node --env-file=.env scripts/migrate/normalize-upc.js",
     "migrate:dedup-upc": "node --env-file=.env scripts/migrate/dedup-upc.js",
     "migrate:trim-low-kcal": "node --env-file=.env scripts/migrate/trim-low-kcal.js",
-    "migrate:trim-brands": "node --env-file=.env scripts/migrate/trim-useless-brands.js"
+    "migrate:trim-brands": "node --env-file=.env scripts/migrate/trim-useless-brands.js",
+    "migrate:restore-unbranded": "node --env-file=.env scripts/migrate/restore-unbranded.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
