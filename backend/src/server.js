@@ -32,11 +32,14 @@ app.get("/foods/search", async (req, res, next) => {
             index: "foods_search",
             compound: {
               should: [
-                // exact phrase match — highest priority (e.g. "Oatmeal" before "Oatmeal Cookie")
-                { phrase: { query: q, path: "name",  score: { boost: { value: 30 } } } },
+                // exact alias match — top priority (e.g. "oatmeal" alias on plain oats)
+                { phrase: { query: q, path: "aliases", score: { boost: { value: 40 } } } },
+                { text:   { query: q, path: "aliases", score: { boost: { value: 20 } } } },
+                // exact phrase match in name
+                { phrase: { query: q, path: "name",    score: { boost: { value: 30 } } } },
                 // fuzzy word match for typos
-                { text: { query: q, path: "name",  fuzzy: { maxEdits: 1 }, score: { boost: { value: 10 } } } },
-                { text: { query: q, path: "brand", score: { boost: { value: 5  } } } },
+                { text:   { query: q, path: "name",    fuzzy: { maxEdits: 1 }, score: { boost: { value: 10 } } } },
+                { text:   { query: q, path: "brand",   score: { boost: { value: 5  } } } },
               ],
             },
           },
