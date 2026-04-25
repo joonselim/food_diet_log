@@ -507,9 +507,9 @@ async function main() {
   let skipped = 0;
 
   for (const rule of RULES) {
-    // Find docs whose name matches the pattern
+    // Only apply to Foundation and SR Legacy — branded foods search fine by name
     const docs = await col.find(
-      { name: { $regex: rule.match.source, $options: "i" } },
+      { source: { $in: ["usda_foundation", "usda_sr"] }, name: { $regex: rule.match.source, $options: "i" } },
       { projection: { _id: 1, name: 1, aliases: 1 } }
     ).toArray();
 
