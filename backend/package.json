@@ -13,7 +13,8 @@
     "ping": "node --env-file=.env scripts/ping.js",
     "indexes": "node --env-file=.env scripts/import/indexes.js",
     "migrate:normalize-upc": "node --env-file=.env scripts/migrate/normalize-upc.js",
-    "migrate:dedup-upc": "node --env-file=.env scripts/migrate/dedup-upc.js"
+    "migrate:dedup-upc": "node --env-file=.env scripts/migrate/dedup-upc.js",
+    "migrate:trim-low-kcal": "node --env-file=.env scripts/migrate/trim-low-kcal.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
