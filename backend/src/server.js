@@ -32,7 +32,10 @@ app.get("/foods/search", async (req, res, next) => {
             index: "foods_search",
             compound: {
               should: [
-                { text: { query: q, path: "name",  score: { boost: { value: 10 } } } },
+                // exact phrase match — highest priority (e.g. "Oatmeal" before "Oatmeal Cookie")
+                { phrase: { query: q, path: "name",  score: { boost: { value: 30 } } } },
+                // fuzzy word match for typos
+                { text: { query: q, path: "name",  fuzzy: { maxEdits: 1 }, score: { boost: { value: 10 } } } },
                 { text: { query: q, path: "brand", score: { boost: { value: 5  } } } },
               ],
             },
