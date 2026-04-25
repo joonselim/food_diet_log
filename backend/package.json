@@ -1,0 +1,26 @@
+{
+  "name": "protein-agent-backend",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --env-file=.env --watch src/server.js",
+    "start": "node src/server.js",
+    "import:usda": "node --env-file=.env --max-old-space-size=8192 scripts/import/usda.js",
+    "ping": "node --env-file=.env scripts/ping.js",
+    "indexes": "node --env-file=.env scripts/import/indexes.js",
+    "migrate:normalize-upc": "node --env-file=.env scripts/migrate/normalize-upc.js",
+    "migrate:dedup-upc": "node --env-file=.env scripts/migrate/dedup-upc.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1",
+    "cors": "^2.8.5",
+    "csv-parse": "^5.5.6",
+    "express": "^4.21.0",
+    "mongodb": "^6.10.0",
+    "multer": "^2.1.1"
+  }
+}
