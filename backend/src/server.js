@@ -40,15 +40,44 @@ app.get("/foods/search", async (req, res, next) => {
                 // fuzzy word match for typos
                 { text:   { query: q, path: "name",    fuzzy: { maxEdits: 1 }, score: { boost: { value: 10 } } } },
                 { text:   { query: q, path: "brand",   score: { boost: { value: 5  } } } },
+                // popular brands get a flat boost
+                { exists: { path: "popularity",        score: { boost: { value: 1  } } } },
               ],
             },
           },
         },
-        { $skip: offset },
-        { $limit: limit },
+        { $limit: limit + 60 },  // fetch extra to allow re-ranking
         { $project: { score: { $meta: "searchScore" }, name: 1, brand: 1, category: 1,
-                      source: 1, source_id: 1, upc: 1, serving: 1, per_100g: 1 } },
+                      source: 1, source_id: 1, upc: 1, serving: 1, per_100g: 1, aliases: 1 } },
       ]).toArray();
+
+      // Re-rank logic (highest priority first):
+      // 1. Exact alias match (e.g. query "oatmeal" → alias "oatmeal" on plain oats)
+      // 2. Adjusted score = Atlas score + popularity bonus - name length penalty
+      // 3. USDA basic sources before branded
+      // 4. Shorter name wins ties
+      const qLower     = q.toLowerCase();
+      const hasAlias   = (doc) => (doc.aliases || []).some((a) => a.toLowerCase() === qLower);
+      const popBonus   = (doc) => (doc.popularity || 0) / 10;
+      const lenPenalty = (name) => Math.max(0, name.length - 10) / 15;  // smooth penalty from 10 chars
+      const sourceRank = { foundation: 0, sr_legacy: 0 };
+      docs.sort((a, b) => {
+        // Exact alias match is unconditionally first
+        const aAlias = hasAlias(a), bAlias = hasAlias(b);
+        if (aAlias !== bAlias) return aAlias ? -1 : 1;
+
+        const aAdj = (a.score || 0) + popBonus(a) - lenPenalty(a.name);
+        const bAdj = (b.score || 0) + popBonus(b) - lenPenalty(b.name);
+        if (Math.abs(aAdj - bAdj) > 0.5) return bAdj - aAdj;
+
+        const aRank = sourceRank[a.source] ?? 1;
+        const bRank = sourceRank[b.source] ?? 1;
+        if (aRank !== bRank) return aRank - bRank;
+        return a.name.length - b.name.length;
+      });
+      docs = docs.slice(offset, offset + limit);
+      // Strip aliases from response (client doesn't need them)
+      docs.forEach((d) => delete d.aliases);
     } catch {
       // Fallback: $text index for local dev
       docs = await db.collection("foods")
