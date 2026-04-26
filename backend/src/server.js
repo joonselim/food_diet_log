@@ -21,63 +21,59 @@ app.get("/foods/search", async (req, res, next) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
 
-    const db = await getDb();
+    const db   = await getDb();
+    const col  = db.collection("foods");
+    const proj = { name: 1, brand: 1, category: 1, source: 1, source_id: 1, upc: 1, serving: 1, per_100g: 1, popularity: 1 };
     let docs;
 
     try {
-      // Atlas Search — index doesn't count toward M0 storage quota
-      docs = await db.collection("foods").aggregate([
+      // ── Step 1: exact matches via find() — guaranteed top results ─────────────
+      const qEsc   = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const exactQ = { $regex: `^${qEsc}$`, $options: "i" };
+      const pinned = await col.find(
+        { $or: [{ name: exactQ }, { aliases: exactQ }] },
+        { projection: proj },
+      ).limit(10).toArray();
+      const pinnedIds = new Set(pinned.map((d) => String(d._id)));
+
+      // ── Step 2: Atlas Search for broader results ──────────────────────────────
+      const searched = await col.aggregate([
         {
           $search: {
             index: "foods_search",
             compound: {
               should: [
-                // exact alias match — top priority (e.g. "oatmeal" alias on plain oats)
                 { phrase: { query: q, path: "aliases", score: { boost: { value: 40 } } } },
                 { text:   { query: q, path: "aliases", score: { boost: { value: 20 } } } },
-                // exact phrase match in name
                 { phrase: { query: q, path: "name",    score: { boost: { value: 30 } } } },
-                // fuzzy word match for typos
                 { text:   { query: q, path: "name",    fuzzy: { maxEdits: 1 }, score: { boost: { value: 10 } } } },
                 { text:   { query: q, path: "brand",   score: { boost: { value: 5  } } } },
-                // popular brands get a flat boost
                 { exists: { path: "popularity",        score: { boost: { value: 1  } } } },
               ],
             },
           },
         },
-        { $limit: limit + 60 },  // fetch extra to allow re-ranking
-        { $project: { score: { $meta: "searchScore" }, name: 1, brand: 1, category: 1,
-                      source: 1, source_id: 1, upc: 1, serving: 1, per_100g: 1, aliases: 1 } },
+        { $limit: limit + 60 },
+        { $project: { score: { $meta: "searchScore" }, ...proj } },
       ]).toArray();
 
-      // Re-rank logic (highest priority first):
-      // 1. Exact alias match (e.g. query "oatmeal" → alias "oatmeal" on plain oats)
-      // 2. Adjusted score = Atlas score + popularity bonus - name length penalty
-      // 3. USDA basic sources before branded
-      // 4. Shorter name wins ties
-      const qLower     = q.toLowerCase();
-      const hasAlias   = (doc) => (doc.aliases || []).some((a) => a.toLowerCase() === qLower);
+      // Re-rank searched results: popularity bonus + length penalty
       const popBonus   = (doc) => (doc.popularity || 0) / 10;
-      const lenPenalty = (name) => Math.max(0, name.length - 10) / 15;  // smooth penalty from 10 chars
+      const lenPenalty = (name) => Math.max(0, name.length - 10) / 15;
       const sourceRank = { foundation: 0, sr_legacy: 0 };
-      docs.sort((a, b) => {
-        // Exact alias match is unconditionally first
-        const aAlias = hasAlias(a), bAlias = hasAlias(b);
-        if (aAlias !== bAlias) return aAlias ? -1 : 1;
-
+      searched.sort((a, b) => {
         const aAdj = (a.score || 0) + popBonus(a) - lenPenalty(a.name);
         const bAdj = (b.score || 0) + popBonus(b) - lenPenalty(b.name);
         if (Math.abs(aAdj - bAdj) > 0.5) return bAdj - aAdj;
-
         const aRank = sourceRank[a.source] ?? 1;
         const bRank = sourceRank[b.source] ?? 1;
         if (aRank !== bRank) return aRank - bRank;
         return a.name.length - b.name.length;
       });
-      docs = docs.slice(offset, offset + limit);
-      // Strip aliases from response (client doesn't need them)
-      docs.forEach((d) => delete d.aliases);
+
+      // ── Step 3: merge — pinned items always first, no duplicates ─────────────
+      const rest = searched.filter((d) => !pinnedIds.has(String(d._id)));
+      docs = [...pinned, ...rest].slice(offset, offset + limit);
     } catch {
       // Fallback: $text index for local dev
       docs = await db.collection("foods")
