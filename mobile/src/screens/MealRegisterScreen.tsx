@@ -30,7 +30,7 @@ type Props = {
   route: RouteProp<RootStackParamList, 'MealRegister'>;
 };
 
-const SLOT_LABELS: Record<MealSlot, string> = { breakfast: '아침', lunch: '점심', dinner: '저녁' };
+const SLOT_LABELS: Record<MealSlot, string> = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
 
 export default function MealRegisterScreen({ navigation, route }: Props) {
   const { slot, date } = route.params;
@@ -45,10 +45,10 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
   );
 
   const handleRemove = (index: number) => {
-    Alert.alert('삭제', '이 항목을 삭제할까요?', [
-      { text: '취소', style: 'cancel' },
+    Alert.alert('Delete', 'Remove this item?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: '삭제', style: 'destructive',
+        text: 'Delete', style: 'destructive',
         onPress: async () => {
           const updated = await removeEntry(date, slot, index);
           setLog(updated);
@@ -69,10 +69,10 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
   const pickAndAnalyze = async (useCamera: boolean) => {
     if (useCamera) {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') { Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.'); return; }
+      if (status !== 'granted') { Alert.alert('Permission Required', 'Camera access is needed.'); return; }
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') { Alert.alert('권한 필요', '사진 라이브러리 권한이 필요합니다.'); return; }
+      if (status !== 'granted') { Alert.alert('Permission Required', 'Photo library access is needed.'); return; }
     }
     const result = useCamera
       ? await ImagePicker.launchCameraAsync({ base64: true, quality: 0.7 })
@@ -84,12 +84,12 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
     try {
       const foods = await analyzePhoto(base64, mimeType);
       if (foods.length === 0) {
-        Alert.alert('분석 결과 없음', '음식을 인식하지 못했어요. 다른 사진을 시도해보세요.');
+        Alert.alert('No Results', 'Could not detect food. Try a different photo.');
       } else {
         setAiResults(foods);
       }
     } catch (e: any) {
-      Alert.alert('분석 실패', e.message ?? '서버 오류가 발생했어요.');
+      Alert.alert('Analysis Failed', e.message ?? 'Server error occurred.');
     } finally {
       setAnalyzing(false);
     }
@@ -121,7 +121,7 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
       setLog(updated);
       setAiResults(null);
     } catch (e: any) {
-      Alert.alert('추가 실패', e.message);
+      Alert.alert('Failed to Add', e.message);
     } finally {
       setAddingAi(false);
     }
@@ -130,7 +130,7 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
   if (!log) {
     return (
       <View style={s.center}>
-        <Text style={s.loadingText}>불러오는 중...</Text>
+        <Text style={s.loadingText}>Loading...</Text>
       </View>
     );
   }
@@ -145,7 +145,7 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8} style={s.backBtn}>
           <ChevronLeft size={22} color={BRIM.ink} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>{SLOT_LABELS[slot]} 등록</Text>
+        <Text style={s.headerTitle}>Log {SLOT_LABELS[slot]}</Text>
         <View style={{ width: 32 }} />
       </View>
 
@@ -154,9 +154,9 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
         <View style={s.totalsGrid}>
           {[
             { l: 'KCAL', v: slotTotal.calories, u: '' },
-            { l: '단백질', v: slotTotal.protein, u: 'g' },
-            { l: '탄수', v: slotTotal.carbs, u: 'g' },
-            { l: '지방', v: slotTotal.fat, u: 'g' },
+            { l: 'Protein', v: slotTotal.protein, u: 'g' },
+            { l: 'Carbs',   v: slotTotal.carbs,   u: 'g' },
+            { l: 'Fat',     v: slotTotal.fat,     u: 'g' },
           ].map((m) => (
             <View key={m.l} style={s.totalCell}>
               <Text style={s.totalLabel}>{m.l}</Text>
@@ -176,8 +176,8 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
           >
             <CameraIcon size={20} color={BRIM.ink} />
             <View>
-              <Text style={s.aiCardTitle}>사진 찍기</Text>
-              <Text style={s.aiCardSub}>AI가 자동 분석</Text>
+              <Text style={s.aiCardTitle}>Take Photo</Text>
+              <Text style={s.aiCardSub}>AI auto-detect</Text>
             </View>
           </TouchableOpacity>
           <TouchableOpacity
@@ -187,8 +187,8 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
           >
             <ImageIcon size={20} color={BRIM.ink} />
             <View>
-              <Text style={s.aiCardTitle}>앨범에서</Text>
-              <Text style={s.aiCardSub}>가지고 오기</Text>
+              <Text style={s.aiCardTitle}>From Album</Text>
+              <Text style={s.aiCardSub}>Choose a photo</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -196,19 +196,19 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
         {analyzing && (
           <View style={s.analyzingRow}>
             <Spinner />
-            <Text style={s.analyzingText}>AI가 음식을 분석하는 중...</Text>
+            <Text style={s.analyzingText}>Analyzing food...</Text>
           </View>
         )}
 
         {/* Entries list */}
         <View style={s.entriesHeader}>
-          <Text style={s.entriesLabel}>등록된 음식 · {entries.length}</Text>
+          <Text style={s.entriesLabel}>Logged · {entries.length}</Text>
         </View>
 
         {entries.length === 0 ? (
           <View style={s.emptyBox}>
-            <Text style={s.emptyTitle}>아직 추가된 음식이 없어요</Text>
-            <Text style={s.emptySub}>사진으로 분석하거나 검색해서 추가하세요</Text>
+            <Text style={s.emptyTitle}>No food added yet</Text>
+            <Text style={s.emptySub}>Analyze a photo or search to add food</Text>
           </View>
         ) : (
           <View style={s.entriesList}>
@@ -226,7 +226,7 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
           onPress={() => navigation.navigate('FoodSearch', { slot, date })}
         >
           <SearchIcon size={16} color={BRIM.paper} />
-          <Text style={s.searchBtnText}>음식 검색하여 추가</Text>
+          <Text style={s.searchBtnText}>Search & Add Food</Text>
         </TouchableOpacity>
       </View>
 
@@ -255,7 +255,7 @@ function EntryCard({ entry, onRemove }: { entry: MealEntry; onRemove: () => void
         </View>
       </View>
       <TouchableOpacity onPress={onRemove} hitSlop={8} style={s.removeBtn}>
-        <Text style={s.removeText}>삭제</Text>
+        <Text style={s.removeText}>Remove</Text>
       </TouchableOpacity>
     </View>
   );
@@ -308,8 +308,8 @@ function AiResultsModal({
         <Pressable style={s.backdrop} onPress={onDismiss} />
         <View style={[s.sheet, { paddingBottom: insets.bottom + 28 }]}>
           <View style={s.dragHandle} />
-          <Text style={s.sheetTitle}>AI 분석 결과</Text>
-          <Text style={s.sheetSub}>추가할 항목을 선택하세요</Text>
+          <Text style={s.sheetTitle}>AI Analysis</Text>
+          <Text style={s.sheetSub}>Select items to add</Text>
 
           <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
             {results.map((food, i) => (
@@ -332,7 +332,7 @@ function AiResultsModal({
 
           <View style={s.sheetBtns}>
             <TouchableOpacity style={s.cancelBtn} onPress={onDismiss}>
-              <Text style={s.cancelText}>취소</Text>
+              <Text style={s.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.confirmBtn, selected.length === 0 && s.confirmBtnOff]}
@@ -340,7 +340,7 @@ function AiResultsModal({
               disabled={loading || selected.length === 0}
             >
               <Text style={[s.confirmText, selected.length === 0 && s.confirmTextOff]}>
-                {loading ? '추가 중...' : `${selected.length}개 추가`}
+                {loading ? 'Adding...' : `Add ${selected.length}`}
               </Text>
             </TouchableOpacity>
           </View>
@@ -352,7 +352,7 @@ function AiResultsModal({
 
 function ConfidenceBadge({ level }: { level: AnalyzedFood['confidence'] }) {
   const dots = level === 'high' ? 3 : level === 'medium' ? 2 : 1;
-  const label = level === 'high' ? '확실' : level === 'medium' ? '보통' : '불확실';
+  const label = level === 'high' ? 'High' : level === 'medium' ? 'Medium' : 'Low';
   const isLow = level === 'low';
   return (
     <View style={[s.badge, isLow && s.badgeLow]}>

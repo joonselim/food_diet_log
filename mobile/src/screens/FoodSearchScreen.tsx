@@ -85,7 +85,7 @@ export default function FoodSearchScreen({ navigation, route }: Props) {
 
   const confirmAdd = async () => {
     if (!selected || grams <= 0) {
-      Alert.alert('오류', '올바른 그램 수를 입력해주세요.');
+      Alert.alert('Error', 'Please enter a valid amount.');
       return;
     }
     const ratio = grams / 100;
@@ -103,7 +103,7 @@ export default function FoodSearchScreen({ navigation, route }: Props) {
       setSelected(null);
       navigation.goBack();
     } catch {
-      Alert.alert('오류', '저장에 실패했어요.');
+      Alert.alert('Error', 'Failed to save.');
     } finally {
       setAdding(false);
     }
@@ -122,7 +122,7 @@ export default function FoodSearchScreen({ navigation, route }: Props) {
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8} style={s.backBtn}>
           <ChevronLeft size={22} color={BRIM.ink} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>음식 검색</Text>
+        <Text style={s.headerTitle}>Food Search</Text>
         <View style={{ width: 32 }} />
       </View>
 
@@ -132,7 +132,7 @@ export default function FoodSearchScreen({ navigation, route }: Props) {
           <SearchIcon size={16} color={BRIM.mute} />
           <TextInput
             style={s.searchInput}
-            placeholder="음식, 브랜드 검색"
+            placeholder="Search food, brand..."
             placeholderTextColor={BRIM.mute}
             value={query}
             onChangeText={search}
@@ -158,18 +158,18 @@ export default function FoodSearchScreen({ navigation, route }: Props) {
         ListEmptyComponent={
           !loading && query.trim() ? (
             <View style={s.emptyWrap}>
-              <Text style={s.emptyText}>검색 결과가 없어요</Text>
+              <Text style={s.emptyText}>No results found</Text>
             </View>
           ) : !query.trim() ? (
             <View style={s.emptyWrap}>
-              <Text style={s.emptyText}>먹은 음식을 검색해 보세요</Text>
+              <Text style={s.emptyText}>Search for food you ate</Text>
             </View>
           ) : null
         }
         ListFooterComponent={
           hasMore ? (
             <TouchableOpacity style={s.loadMoreBtn} onPress={loadMore} disabled={loadingMore}>
-              <Text style={s.loadMoreText}>{loadingMore ? '불러오는 중...' : '더 보기'}</Text>
+              <Text style={s.loadMoreText}>{loadingMore ? 'Loading...' : 'Load more'}</Text>
             </TouchableOpacity>
           ) : null
         }
@@ -192,13 +192,13 @@ export default function FoodSearchScreen({ navigation, route }: Props) {
 
               {/* Per 100g info */}
               <View style={s.per100Card}>
-                <Text style={s.per100Label}>100g 기준</Text>
+                <Text style={s.per100Label}>per 100g</Text>
                 <Text style={s.per100Values}>
-                  {fmt(selected.per_100g.kcal ?? 0)} kcal · 단백질 {fmtG(selected.per_100g.protein_g ?? 0)}g · 탄수 {fmtG(selected.per_100g.carbs_g ?? 0)}g · 지방 {fmtG(selected.per_100g.fat_g ?? 0)}g
+                  {fmt(selected.per_100g.kcal ?? 0)} kcal · Protein {fmtG(selected.per_100g.protein_g ?? 0)}g · Carbs {fmtG(selected.per_100g.carbs_g ?? 0)}g · Fat {fmtG(selected.per_100g.fat_g ?? 0)}g
                 </Text>
               </View>
 
-              <Text style={s.amountLabel}>섭취량</Text>
+              <Text style={s.amountLabel}>Amount</Text>
 
               {/* Preset chips */}
               <View style={s.presetRow}>
@@ -227,15 +227,15 @@ export default function FoodSearchScreen({ navigation, route }: Props) {
 
               {/* Preview */}
               <View style={s.previewRow}>
-                <Text style={s.previewText}>예상 </Text>
+                <Text style={s.previewText}>Est. </Text>
                 <Text style={s.previewVal}>{fmt(previewKcal)} kcal</Text>
-                <Text style={s.previewText}> · 단백질 </Text>
+                <Text style={s.previewText}> · Protein </Text>
                 <Text style={s.previewVal}>{fmtG(previewP)}g</Text>
               </View>
 
               <View style={s.sheetBtns}>
                 <TouchableOpacity style={s.cancelBtn} onPress={() => setSelected(null)}>
-                  <Text style={s.cancelText}>취소</Text>
+                  <Text style={s.cancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[s.confirmBtn, (!grams || adding) && s.confirmBtnOff]}
@@ -243,7 +243,7 @@ export default function FoodSearchScreen({ navigation, route }: Props) {
                   disabled={adding || !grams}
                 >
                   <Text style={[s.confirmText, (!grams || adding) && s.confirmTextOff]}>
-                    {adding ? '저장 중...' : '추가'}
+                    {adding ? 'Saving...' : 'Add'}
                   </Text>
                 </TouchableOpacity>
               </View>

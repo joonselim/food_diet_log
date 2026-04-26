@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -15,7 +15,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '../types';
 import { BRIM, F } from '../theme';
-import { GlassJar } from '../components/GlassJar';
 import { updateGoals } from '../storage';
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'Onboarding'> };
@@ -40,31 +39,86 @@ type Gender = 'male' | 'female';
 type Goal = 'diet' | 'maintain' | 'gain';
 
 const GOALS: { key: Goal; label: string; sub: string }[] = [
-  { key: 'diet',     label: '다이어트',    sub: '칼로리 20% 감량' },
-  { key: 'maintain', label: '체중 유지',   sub: '현재 체중 유지' },
-  { key: 'gain',     label: '근육 증가',   sub: '칼로리 10% 증량' },
+  { key: 'diet',     label: 'Lose Weight',   sub: '20% calorie deficit' },
+  { key: 'maintain', label: 'Maintain',      sub: 'Stay at current weight' },
+  { key: 'gain',     label: 'Build Muscle',  sub: '10% calorie surplus' },
 ];
+
+// ── WheelPicker ───────────────────────────────────────────────────────────────
+
+const ITEM_H = 44;
+const VISIBLE = 3;
+
+const AGE_VALUES    = Array.from({ length: 89  }, (_, i) => i + 12);
+const HEIGHT_VALUES = Array.from({ length: 151 }, (_, i) => i + 100);
+const WEIGHT_VALUES = Array.from({ length: 156 }, (_, i) => i + 25);
+
+function WheelPicker({ values, selected, onChange }: {
+  values: number[];
+  selected: number;
+  onChange: (v: number) => void;
+}) {
+  const ref = useRef<ScrollView>(null);
+  const idx = Math.max(0, values.indexOf(selected));
+
+  const snap = (y: number) => {
+    const i = Math.max(0, Math.min(Math.round(y / ITEM_H), values.length - 1));
+    onChange(values[i]);
+  };
+
+  return (
+    <View style={wp.wrap}>
+      <View style={wp.overlay} pointerEvents="none" />
+      <ScrollView
+        ref={ref}
+        contentOffset={{ x: 0, y: idx * ITEM_H }}
+        style={wp.scroll}
+        contentContainerStyle={wp.content}
+        snapToInterval={ITEM_H}
+        decelerationRate="fast"
+        showsVerticalScrollIndicator={false}
+        onMomentumScrollEnd={(e) => snap(e.nativeEvent.contentOffset.y)}
+        onScrollEndDrag={(e) => snap(e.nativeEvent.contentOffset.y)}
+      >
+        {values.map((v) => (
+          <View key={v} style={[wp.item, v === selected && wp.itemOn]}>
+            <Text style={[wp.text, v === selected && wp.textOn]}>{v}</Text>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+const wp = StyleSheet.create({
+  wrap: { height: ITEM_H * VISIBLE, overflow: 'hidden' },
+  overlay: {
+    position: 'absolute', left: 0, right: 0,
+    top: ITEM_H * 1, height: ITEM_H,
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: BRIM.ink,
+    zIndex: 10,
+  },
+  scroll: { height: ITEM_H * VISIBLE },
+  content: { paddingVertical: ITEM_H * 1 },
+  item: { height: ITEM_H, alignItems: 'center', justifyContent: 'center', opacity: 0.25 },
+  itemOn: { opacity: 1 },
+  text: { fontFamily: F.num, fontSize: 18, color: BRIM.mute, letterSpacing: -0.3 },
+  textOn: { fontFamily: F.bold, fontSize: 22, color: BRIM.ink, letterSpacing: -0.6 },
+});
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function OnboardingScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const [gender, setGender] = useState<Gender>('male');
-  const [age, setAge] = useState('');
-  const [height, setHeight] = useState('');
-  const [weight, setWeight] = useState('');
+  const [age, setAge] = useState(25);
+  const [height, setHeight] = useState(170);
+  const [weight, setWeight] = useState(65);
   const [goal, setGoal] = useState<Goal>('maintain');
 
-  const canProceed = age.trim() && height.trim() && weight.trim();
-
   const handleStart = async () => {
-    const profile = {
-      gender,
-      age: parseInt(age, 10),
-      height: parseFloat(height),
-      weight: parseFloat(weight),
-      goal,
-    };
+    const profile = { gender, age, height, weight, goal };
     await AsyncStorage.setItem('user_profile', JSON.stringify(profile));
-    // Pre-save calculated goals so HomeScreen shows them immediately
     const today = new Date();
     const d = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     await updateGoals(d, calcGoals(profile));
@@ -83,13 +137,12 @@ export default function OnboardingScreen({ navigation }: Props) {
       >
         {/* Hero */}
         <View style={s.hero}>
-          <GlassJar width={72} height={88} progress={0.62} liquidColor={BRIM.liquid} showWaves={false} />
-          <Text style={s.title}>Brim 시작하기</Text>
-          <Text style={s.subtitle}>체형 정보를 입력하면{'\n'}맞춤 영양 목표를 계산해드려요</Text>
+          <Image source={require('../../assets/appicon.png')} style={s.appIcon} />
+          <Text style={s.title}>Get Started</Text>
         </View>
 
         {/* Gender */}
-        <Text style={s.sectionLabel}>성별</Text>
+        <Text style={s.sectionLabel}>Gender</Text>
         <View style={s.toggleRow}>
           {(['male', 'female'] as Gender[]).map((g) => (
             <Pressable
@@ -98,88 +151,54 @@ export default function OnboardingScreen({ navigation }: Props) {
               onPress={() => setGender(g)}
             >
               <Text style={[s.toggleText, gender === g && s.toggleTextOn]}>
-                {g === 'male' ? '남성' : '여성'}
+                {g === 'male' ? 'Male' : 'Female'}
               </Text>
             </Pressable>
           ))}
         </View>
 
-        {/* Body stats */}
-        <Text style={s.sectionLabel}>기본 정보</Text>
-        <View style={s.statsGrid}>
-          <View style={s.statCard}>
-            <Text style={s.statLabel}>나이</Text>
-            <View style={s.statInputRow}>
-              <TextInput
-                style={s.statInput}
-                value={age}
-                onChangeText={setAge}
-                keyboardType="number-pad"
-                placeholder="25"
-                placeholderTextColor={BRIM.mute}
-                maxLength={3}
-              />
-              <Text style={s.statUnit}>세</Text>
-            </View>
+        {/* Body stats – WheelPicker */}
+        <Text style={s.sectionLabel}>Body Info</Text>
+        <View style={s.pickersRow}>
+          <View style={s.pickerCol}>
+            <Text style={s.pickerColLabel}>Age</Text>
+            <WheelPicker values={AGE_VALUES} selected={age} onChange={setAge} />
+            <Text style={s.pickerColUnit}>yr</Text>
           </View>
-          <View style={s.statCard}>
-            <Text style={s.statLabel}>키</Text>
-            <View style={s.statInputRow}>
-              <TextInput
-                style={s.statInput}
-                value={height}
-                onChangeText={setHeight}
-                keyboardType="decimal-pad"
-                placeholder="170"
-                placeholderTextColor={BRIM.mute}
-                maxLength={5}
-              />
-              <Text style={s.statUnit}>cm</Text>
-            </View>
+          <View style={s.pickerCol}>
+            <Text style={s.pickerColLabel}>Height</Text>
+            <WheelPicker values={HEIGHT_VALUES} selected={height} onChange={setHeight} />
+            <Text style={s.pickerColUnit}>cm</Text>
           </View>
-          <View style={s.statCard}>
-            <Text style={s.statLabel}>몸무게</Text>
-            <View style={s.statInputRow}>
-              <TextInput
-                style={s.statInput}
-                value={weight}
-                onChangeText={setWeight}
-                keyboardType="decimal-pad"
-                placeholder="65"
-                placeholderTextColor={BRIM.mute}
-                maxLength={5}
-              />
-              <Text style={s.statUnit}>kg</Text>
-            </View>
+          <View style={s.pickerCol}>
+            <Text style={s.pickerColLabel}>Weight</Text>
+            <WheelPicker values={WEIGHT_VALUES} selected={weight} onChange={setWeight} />
+            <Text style={s.pickerColUnit}>kg</Text>
           </View>
         </View>
 
         {/* Goal */}
-        <Text style={s.sectionLabel}>목표</Text>
-        <View style={s.goalList}>
+        <Text style={s.sectionLabel}>Goal</Text>
+        <View style={s.goalRow}>
           {GOALS.map((g) => (
             <Pressable
               key={g.key}
               style={[s.goalCard, goal === g.key && s.goalCardOn]}
               onPress={() => setGoal(g.key)}
             >
-              <View style={[s.goalDot, goal === g.key && s.goalDotOn]} />
-              <View style={{ flex: 1 }}>
-                <Text style={[s.goalLabel, goal === g.key && s.goalLabelOn]}>{g.label}</Text>
-                <Text style={s.goalSub}>{g.sub}</Text>
-              </View>
+              <Text style={[s.goalLabel, goal === g.key && s.goalLabelOn]}>{g.label}</Text>
+              <Text style={s.goalSub}>{g.sub}</Text>
             </Pressable>
           ))}
         </View>
 
         {/* CTA */}
         <TouchableOpacity
-          style={[s.startBtn, !canProceed && s.startBtnOff]}
+          style={s.startBtn}
           onPress={handleStart}
-          disabled={!canProceed}
           activeOpacity={0.8}
         >
-          <Text style={[s.startText, !canProceed && s.startTextOff]}>시작하기</Text>
+          <Text style={s.startText}>Get Started</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -191,8 +210,8 @@ const s = StyleSheet.create({
   scroll: { paddingHorizontal: 24 },
 
   hero: { alignItems: 'center', paddingTop: 32, paddingBottom: 36, gap: 14 },
+  appIcon: { width: 96, height: 96, borderRadius: 22 },
   title: { fontFamily: F.bold, fontSize: 28, color: BRIM.ink, letterSpacing: -0.8 },
-  subtitle: { fontFamily: F.med, fontSize: 14, color: BRIM.mute, textAlign: 'center', lineHeight: 20 },
 
   sectionLabel: {
     fontFamily: F.semi, fontSize: 11, color: BRIM.mute,
@@ -209,40 +228,25 @@ const s = StyleSheet.create({
   toggleText: { fontFamily: F.semi, fontSize: 15, color: BRIM.ink },
   toggleTextOn: { color: BRIM.paper },
 
-  statsGrid: { flexDirection: 'row', gap: 8 },
-  statCard: {
-    flex: 1, backgroundColor: BRIM.card, borderRadius: 14,
-    borderWidth: 1, borderColor: BRIM.hair, padding: 14,
-  },
-  statLabel: { fontFamily: F.semi, fontSize: 11, color: BRIM.mute, marginBottom: 8 },
-  statInputRow: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
-  statInput: {
-    flex: 1, fontFamily: F.bold, fontSize: 22, color: BRIM.ink,
-    padding: 0, letterSpacing: -0.5,
-  },
-  statUnit: { fontFamily: F.med, fontSize: 12, color: BRIM.mute },
+  pickersRow: { flexDirection: 'row' },
+  pickerCol: { flex: 1, alignItems: 'center', paddingVertical: 4 },
+  pickerColLabel: { fontFamily: F.semi, fontSize: 11, color: BRIM.mute, marginBottom: 6, letterSpacing: 0.5 },
+  pickerColUnit: { fontFamily: F.med, fontSize: 11, color: BRIM.mute, marginTop: 6 },
 
-  goalList: { gap: 8 },
+  goalRow: { flexDirection: 'row', gap: 8 },
   goalCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
+    flex: 1, alignItems: 'center',
     backgroundColor: BRIM.card, borderRadius: 14,
-    borderWidth: 1, borderColor: BRIM.hair, padding: 16,
+    borderWidth: 1, borderColor: BRIM.hair, paddingVertical: 14, paddingHorizontal: 6,
   },
-  goalCardOn: { borderColor: BRIM.ink, backgroundColor: BRIM.card },
-  goalDot: {
-    width: 18, height: 18, borderRadius: 99,
-    borderWidth: 2, borderColor: BRIM.hair,
-  },
-  goalDotOn: { borderColor: BRIM.ink, backgroundColor: BRIM.ink },
-  goalLabel: { fontFamily: F.semi, fontSize: 15, color: BRIM.ink, marginBottom: 2 },
+  goalCardOn: { borderColor: BRIM.ink },
+  goalLabel: { fontFamily: F.semi, fontSize: 14, color: BRIM.ink, marginBottom: 3, textAlign: 'center' },
   goalLabelOn: { color: BRIM.ink },
-  goalSub: { fontFamily: F.med, fontSize: 12, color: BRIM.mute },
+  goalSub: { fontFamily: F.med, fontSize: 11, color: BRIM.mute, textAlign: 'center' },
 
   startBtn: {
     marginTop: 32, paddingVertical: 18, borderRadius: 16,
     backgroundColor: BRIM.ink, alignItems: 'center',
   },
-  startBtnOff: { backgroundColor: BRIM.hair },
   startText: { fontFamily: F.bold, fontSize: 16, color: BRIM.paper, letterSpacing: -0.3 },
-  startTextOff: { color: BRIM.mute },
 });

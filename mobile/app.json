@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.joonselim.brim"
+      "bundleIdentifier": "com.joonselim.brim",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -28,7 +31,10 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiBase": "https://fooddietlog-production.up.railway.app"
+      "apiBase": "https://fooddietlog-production.up.railway.app",
+      "eas": {
+        "projectId": "12618ef8-e7ad-41c7-9711-10473287cdef"
+      }
     },
     "plugins": [
       "expo-font",

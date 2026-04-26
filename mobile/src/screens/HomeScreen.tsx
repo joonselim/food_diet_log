@@ -69,9 +69,10 @@ function calcGoals(p: UserProfile): DailyLog['goals'] {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const SLOT_LABELS: Record<MealSlot, string> = { breakfast: '아침', lunch: '점심', dinner: '저녁' };
+const SLOT_LABELS: Record<MealSlot, string> = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
 const SLOTS: MealSlot[] = ['breakfast', 'lunch', 'dinner'];
-const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'];
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function dateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -79,9 +80,8 @@ function dateStr(d: Date) {
 
 function dateLabel(d: Date) {
   const isToday = dateStr(d) === dateStr(new Date());
-  return isToday
-    ? `오늘 · ${d.getMonth() + 1}월 ${d.getDate()}일 · ${DAYS_KO[d.getDay()]}`
-    : `${d.getMonth() + 1}월 ${d.getDate()}일 · ${DAYS_KO[d.getDay()]}`;
+  const label = `${MONTHS[d.getMonth()]} ${d.getDate()} · ${DAYS[d.getDay()]}`;
+  return isToday ? `Today · ${label}` : label;
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -141,12 +141,12 @@ export default function HomeScreen({ navigation }: Props) {
             <Text style={s.dateLbl}>{dateLabel(selectedDate)}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setGoalsModal(true)} hitSlop={8}>
-            <Text style={s.goalsBtn}>목표 설정 →</Text>
+            <Text style={s.goalsBtn}>Edit Goals →</Text>
           </TouchableOpacity>
         </View>
 
         <View style={s.titleRow}>
-          <Text style={s.title}>오늘의 칼로리</Text>
+          <Text style={s.title}>Today's Calories</Text>
         </View>
 
         {/* Hero bear */}
@@ -158,16 +158,15 @@ export default function HomeScreen({ navigation }: Props) {
               <Text style={s.heroSub}>/ {fmt(goals.calories)} kcal</Text>
             </View>
           </View>
-          {/* Speech bubble */}
-          <BearSpeech calories={total.calories} goal={goals.calories} />
+
         </View>
 
         {/* Macro text row */}
         <View style={s.macroRow}>
           {([
-            { label: '단백질', value: total.protein, target: goals.protein },
-            { label: '탄수',   value: total.carbs,   target: goals.carbs },
-            { label: '지방',   value: total.fat,     target: goals.fat },
+            { label: 'Protein', value: total.protein, target: goals.protein },
+            { label: 'Carbs',   value: total.carbs,   target: goals.carbs },
+            { label: 'Fat',     value: total.fat,     target: goals.fat },
           ] as const).map((m) => (
             <View key={m.label} style={s.macroCell}>
               <Text style={s.macroLabel}>{m.label}</Text>
@@ -197,7 +196,7 @@ export default function HomeScreen({ navigation }: Props) {
           <Pressable style={s.calOverlay} onPress={() => setShowCalendar(false)}>
             <Pressable style={s.calSheet} onPress={() => {}}>
               <View style={s.dragHandle} />
-              <Text style={s.calTitle}>날짜 선택</Text>
+              <Text style={s.calTitle}>Select Date</Text>
               <DateTimePicker
                 value={selectedDate}
                 mode="date"
@@ -223,24 +222,6 @@ export default function HomeScreen({ navigation }: Props) {
   );
 }
 
-// ── Bear speech bubble ────────────────────────────────────────────────────────
-
-function BearSpeech({ calories, goal }: { calories: number; goal: number }) {
-  const ratio = goal > 0 ? calories / goal : 0;
-  let msg: string, sub: string;
-  if (calories <= 0)     { msg = '배고파요...';    sub = '뭐든 먹어볼까요?'; }
-  else if (ratio < 0.9)  { msg = '오물오물';       sub = '맛있게 먹는 중!'; }
-  else if (ratio <= 1.1) { msg = '딱 좋아요!';     sub = '오늘 목표 달성'; }
-  else                   { msg = '으어, 배불러요!'; sub = '조금 과식했어요'; }
-
-  return (
-    <View style={s.bubble}>
-      <Text style={s.bubbleMsg}>{msg}</Text>
-      <Text style={s.bubbleSub}>{sub}</Text>
-    </View>
-  );
-}
-
 // ── Slot card ─────────────────────────────────────────────────────────────────
 
 function SlotCard({ slot, entries, onAdd }: {
@@ -255,17 +236,17 @@ function SlotCard({ slot, entries, onAdd }: {
           <Text style={s.slotName}>{SLOT_LABELS[slot]}</Text>
           {entries.length > 0 && (
             <Text style={s.slotSummary} numberOfLines={1}>
-              {fmt(slotTotal.calories)} kcal · 단백질 {fmtG(slotTotal.protein)}g
+              {fmt(slotTotal.calories)} kcal · Protein {fmtG(slotTotal.protein)}g
             </Text>
           )}
         </View>
         <TouchableOpacity onPress={onAdd} hitSlop={8} style={s.addBtn}>
           <PlusIcon size={14} color={BRIM.ink} />
-          <Text style={s.addBtnText}>추가</Text>
+          <Text style={s.addBtnText}>Add</Text>
         </TouchableOpacity>
       </View>
       {entries.length === 0 ? (
-        <Text style={s.emptySlot}>아직 기록이 없어요.</Text>
+        <Text style={s.emptySlot}>Nothing logged yet.</Text>
       ) : (
         <View style={s.entryList}>
           {entries.map((e, i) => (
@@ -291,7 +272,7 @@ function SlotCard({ slot, entries, onAdd }: {
 type Goals = DailyLog['goals'];
 type GoalMode = 'manual' | 'body';
 
-const GOAL_LABELS = ['다이어트', '유지', '근육증가'] as const;
+const GOAL_LABELS = ['Lose Weight', 'Maintain', 'Build Muscle'] as const;
 const GOAL_VALUES: UserProfile['goal'][] = ['diet', 'maintain', 'gain'];
 
 function GoalsModal({ visible, current, onSave, onDismiss }: {
@@ -316,7 +297,7 @@ function GoalsModal({ visible, current, onSave, onDismiss }: {
   const handleSave = async () => {
     const goals = mode === 'body' ? computed : draft;
     if (Object.values(goals).some((v) => !Number.isFinite(v) || v <= 0)) {
-      Alert.alert('오류', '값을 올바르게 입력해주세요.');
+      Alert.alert('Error', 'Please enter valid values.');
       return;
     }
     setSaving(true);
@@ -332,14 +313,14 @@ function GoalsModal({ visible, current, onSave, onDismiss }: {
         <Pressable style={s.backdrop} onPress={onDismiss} />
         <ScrollView style={s.sheet} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
           <View style={s.dragHandle} />
-          <Text style={s.sheetTitle}>목표 설정</Text>
+          <Text style={s.sheetTitle}>Goals</Text>
 
           {/* Mode toggle */}
           <View style={s.modeToggle}>
             {(['body', 'manual'] as GoalMode[]).map((m) => (
               <TouchableOpacity key={m} style={[s.modeBtn, mode === m && s.modeBtnOn]} onPress={() => setMode(m)}>
                 <Text style={[s.modeBtnText, mode === m && s.modeBtnTextOn]}>
-                  {m === 'body' ? '체형으로 계산' : '직접 입력'}
+                  {m === 'body' ? 'Calculate from body' : 'Enter manually'}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -349,7 +330,7 @@ function GoalsModal({ visible, current, onSave, onDismiss }: {
             <View style={s.bodyForm}>
               {/* Gender */}
               <View style={s.bodyRow}>
-                <Text style={s.bodyLabel}>성별</Text>
+                <Text style={s.bodyLabel}>Gender</Text>
                 <View style={s.genderRow}>
                   {(['male', 'female'] as const).map((g) => (
                     <TouchableOpacity
@@ -358,7 +339,7 @@ function GoalsModal({ visible, current, onSave, onDismiss }: {
                       onPress={() => setProfile((p) => ({ ...p, gender: g }))}
                     >
                       <Text style={[s.genderText, profile.gender === g && s.genderTextOn]}>
-                        {g === 'male' ? '남성' : '여성'}
+                        {g === 'male' ? 'Male' : 'Female'}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -367,9 +348,9 @@ function GoalsModal({ visible, current, onSave, onDismiss }: {
 
               {/* Age / Height / Weight */}
               {([
-                { key: 'age',    label: '나이',   unit: '세' },
-                { key: 'height', label: '키',     unit: 'cm' },
-                { key: 'weight', label: '몸무게', unit: 'kg' },
+                { key: 'age',    label: 'Age',    unit: 'yr' },
+                { key: 'height', label: 'Height', unit: 'cm' },
+                { key: 'weight', label: 'Weight', unit: 'kg' },
               ] as { key: keyof UserProfile; label: string; unit: string }[]).map(({ key, label, unit }) => (
                 <View key={key} style={s.bodyRow}>
                   <Text style={s.bodyLabel}>{label}</Text>
@@ -388,7 +369,7 @@ function GoalsModal({ visible, current, onSave, onDismiss }: {
 
               {/* Goal */}
               <View style={s.bodyRow}>
-                <Text style={s.bodyLabel}>목표</Text>
+                <Text style={s.bodyLabel}>Goal</Text>
                 <View style={s.goalBtnRow}>
                   {GOAL_VALUES.map((g, i) => (
                     <TouchableOpacity
@@ -406,13 +387,13 @@ function GoalsModal({ visible, current, onSave, onDismiss }: {
 
               {/* Calculated preview */}
               <View style={s.calcPreview}>
-                <Text style={s.calcTitle}>계산된 목표</Text>
+                <Text style={s.calcTitle}>Calculated Goals</Text>
                 <View style={s.calcRow}>
                   {[
-                    { l: '칼로리', v: computed.calories, u: 'kcal' },
-                    { l: '단백질', v: computed.protein,  u: 'g' },
-                    { l: '탄수',   v: computed.carbs,    u: 'g' },
-                    { l: '지방',   v: computed.fat,      u: 'g' },
+                    { l: 'Calories', v: computed.calories, u: 'kcal' },
+                    { l: 'Protein',  v: computed.protein,  u: 'g' },
+                    { l: 'Carbs',    v: computed.carbs,    u: 'g' },
+                    { l: 'Fat',      v: computed.fat,      u: 'g' },
                   ].map((m) => (
                     <View key={m.l} style={s.calcCell}>
                       <Text style={s.calcNum}>{m.v}</Text>
@@ -426,10 +407,10 @@ function GoalsModal({ visible, current, onSave, onDismiss }: {
           ) : (
             <View style={s.goalFields}>
               {([
-                { key: 'calories', label: '칼로리', unit: 'kcal' },
-                { key: 'protein',  label: '단백질',  unit: 'g' },
-                { key: 'carbs',    label: '탄수화물', unit: 'g' },
-                { key: 'fat',      label: '지방',    unit: 'g' },
+                { key: 'calories', label: 'Calories', unit: 'kcal' },
+                { key: 'protein',  label: 'Protein',  unit: 'g' },
+                { key: 'carbs',    label: 'Carbs',    unit: 'g' },
+                { key: 'fat',      label: 'Fat',      unit: 'g' },
               ] as { key: keyof Goals; label: string; unit: string }[]).map(({ key, label, unit }) => (
                 <View key={key} style={s.goalRow}>
                   <Text style={s.goalLabel}>{label}</Text>
@@ -448,10 +429,10 @@ function GoalsModal({ visible, current, onSave, onDismiss }: {
 
           <View style={s.sheetBtns}>
             <TouchableOpacity style={s.cancelBtn} onPress={onDismiss}>
-              <Text style={s.cancelText}>취소</Text>
+              <Text style={s.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.confirmBtn} onPress={handleSave} disabled={saving}>
-              <Text style={s.confirmText}>{saving ? '저장 중...' : '저장'}</Text>
+              <Text style={s.confirmText}>{saving ? 'Saving...' : 'Save'}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -493,15 +474,6 @@ const s = StyleSheet.create({
   heroNum: { fontFamily: F.bold, fontSize: 44, letterSpacing: -1.8 },
   heroSub: { fontFamily: F.num, fontSize: 13, color: BRIM.mute, letterSpacing: -0.1 },
 
-  bubble: {
-    backgroundColor: BRIM.card, borderRadius: 18,
-    borderWidth: 1.5, borderColor: BRIM.ink,
-    paddingHorizontal: 18, paddingVertical: 10,
-    alignItems: 'center', marginTop: 4, marginBottom: 16,
-  },
-  bubbleMsg: { fontFamily: F.bold, fontSize: 15, color: BRIM.ink, letterSpacing: -0.3 },
-  bubbleSub: { fontFamily: F.med, fontSize: 11, color: BRIM.mute, marginTop: 1 },
-
   macroRow: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 20, paddingBottom: 20 },
   macroCell: { alignItems: 'center' },
   macroLabel: { fontFamily: F.semi, fontSize: 10, color: BRIM.mute, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
@@ -522,9 +494,9 @@ const s = StyleSheet.create({
   entryRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   entryName: { fontFamily: F.semi, fontSize: 13, color: BRIM.ink },
   entryBrand: { fontFamily: F.med, fontSize: 11, color: BRIM.mute, marginTop: 1 },
-  entryRight: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexShrink: 0 },
-  entryGrams: { fontFamily: F.num, fontSize: 11, color: BRIM.mute },
-  entryKcal: { fontFamily: F.numSemi, fontSize: 12, color: BRIM.ink },
+  entryRight: { flexDirection: 'row', alignItems: 'baseline', gap: 4, flexShrink: 0 },
+  entryGrams: { fontFamily: F.num, fontSize: 11, color: BRIM.mute, width: 48, textAlign: 'right' },
+  entryKcal: { fontFamily: F.numSemi, fontSize: 12, color: BRIM.ink, width: 38, textAlign: 'right' },
 
   // Calendar
   calOverlay: { flex: 1, backgroundColor: 'rgba(11,11,14,0.35)', justifyContent: 'flex-end' },
