@@ -1,8 +1,12 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,43 +14,41 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { DailyLog, MealEntry, MealSlot, RootStackParamList } from '../types';
 import { addEntry, getLog, removeEntry, totals } from '../storage';
 import { analyzePhoto, AnalyzedFood } from '../api';
+import { BRIM, F, fmt, fmtG } from '../theme';
+import { CameraIcon, ImageIcon, SearchIcon, ChevronLeft, CheckIcon } from '../components/Icons';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'MealRegister'>;
   route: RouteProp<RootStackParamList, 'MealRegister'>;
 };
 
-const SLOT_LABELS: Record<MealSlot, string> = {
-  breakfast: '아침',
-  lunch: '점심',
-  dinner: '저녁',
-};
+const SLOT_LABELS: Record<MealSlot, string> = { breakfast: '아침', lunch: '점심', dinner: '저녁' };
 
 export default function MealRegisterScreen({ navigation, route }: Props) {
   const { slot, date } = route.params;
+  const insets = useSafeAreaInsets();
   const [log, setLog] = useState<DailyLog | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [aiResults, setAiResults] = useState<AnalyzedFood[] | null>(null);
   const [addingAi, setAddingAi] = useState(false);
 
   useFocusEffect(
-    useCallback(() => {
-      getLog(date).then(setLog);
-    }, [date]),
+    useCallback(() => { getLog(date).then(setLog); }, [date]),
   );
 
   const handleRemove = (index: number) => {
     Alert.alert('삭제', '이 항목을 삭제할까요?', [
       { text: '취소', style: 'cancel' },
       {
-        text: '삭제',
-        style: 'destructive',
+        text: '삭제', style: 'destructive',
         onPress: async () => {
           const updated = await removeEntry(date, slot, index);
           setLog(updated);
@@ -55,54 +57,34 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
     ]);
   };
 
-  const handleAnalyzePhoto = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
-      return;
+  const compressImage = async (uri: string) => {
+    const r = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 800 } }],
+      { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+    );
+    return { base64: r.base64!, mimeType: 'image/jpeg' };
+  };
+
+  const pickAndAnalyze = async (useCamera: boolean) => {
+    if (useCamera) {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') { Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.'); return; }
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') { Alert.alert('권한 필요', '사진 라이브러리 권한이 필요합니다.'); return; }
     }
+    const result = useCamera
+      ? await ImagePicker.launchCameraAsync({ base64: true, quality: 0.7 })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], base64: true, quality: 0.7 });
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      base64: true,
-      quality: 0.7,
-    });
-
-    if (result.canceled || !result.assets[0]?.base64) return;
-
-    const { base64, mimeType = 'image/jpeg' } = result.assets[0];
+    if (result.canceled || !result.assets[0]?.uri) return;
     setAnalyzing(true);
+    const { base64, mimeType } = await compressImage(result.assets[0].uri);
     try {
       const foods = await analyzePhoto(base64, mimeType);
       if (foods.length === 0) {
         Alert.alert('분석 결과 없음', '음식을 인식하지 못했어요. 다른 사진을 시도해보세요.');
-      } else {
-        setAiResults(foods);
-      }
-    } catch (e: any) {
-      Alert.alert('분석 실패', e.message ?? '서버 오류가 발생했어요.');
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
-  const handleCameraCapture = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      base64: true,
-      quality: 0.7,
-    });
-    if (result.canceled || !result.assets[0]?.base64) return;
-    const { base64, mimeType = 'image/jpeg' } = result.assets[0];
-    setAnalyzing(true);
-    try {
-      const foods = await analyzePhoto(base64, mimeType);
-      if (foods.length === 0) {
-        Alert.alert('분석 결과 없음', '음식을 인식하지 못했어요.');
       } else {
         setAiResults(foods);
       }
@@ -145,65 +127,109 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
     }
   };
 
-  if (!log) return <View style={styles.center}><Text>불러오는 중...</Text></View>;
+  if (!log) {
+    return (
+      <View style={s.center}>
+        <Text style={s.loadingText}>불러오는 중...</Text>
+      </View>
+    );
+  }
 
   const entries = log.meals[slot];
   const slotTotal = totals(entries);
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Slot total summary */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>{SLOT_LABELS[slot]} 합계</Text>
-          <View style={styles.macroRow}>
-            <MacroChip label="칼로리" value={slotTotal.calories.toFixed(0)} unit="kcal" />
-            <MacroChip label="단백질" value={slotTotal.protein.toFixed(1)} unit="g" />
-            <MacroChip label="탄수" value={slotTotal.carbs.toFixed(1)} unit="g" />
-            <MacroChip label="지방" value={slotTotal.fat.toFixed(1)} unit="g" />
-          </View>
+    <View style={[s.root, { paddingTop: insets.top }]}>
+      {/* Custom header */}
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8} style={s.backBtn}>
+          <ChevronLeft size={22} color={BRIM.ink} />
+        </TouchableOpacity>
+        <Text style={s.headerTitle}>{SLOT_LABELS[slot]} 등록</Text>
+        <View style={{ width: 32 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+        {/* Totals strip */}
+        <View style={s.totalsGrid}>
+          {[
+            { l: 'KCAL', v: slotTotal.calories, u: '' },
+            { l: '단백질', v: slotTotal.protein, u: 'g' },
+            { l: '탄수', v: slotTotal.carbs, u: 'g' },
+            { l: '지방', v: slotTotal.fat, u: 'g' },
+          ].map((m) => (
+            <View key={m.l} style={s.totalCell}>
+              <Text style={s.totalLabel}>{m.l}</Text>
+              <Text style={s.totalValue}>
+                {fmt(m.v)}<Text style={s.totalUnit}>{m.u}</Text>
+              </Text>
+            </View>
+          ))}
         </View>
 
-        {/* AI Analyze buttons */}
-        <View style={styles.aiRow}>
-          <TouchableOpacity style={styles.aiBtn} onPress={handleCameraCapture} disabled={analyzing}>
-            <Text style={styles.aiBtnText}>📷 사진 찍기</Text>
+        {/* AI buttons */}
+        <View style={s.aiGrid}>
+          <TouchableOpacity
+            style={[s.aiCard, analyzing && s.aiCardDisabled]}
+            onPress={() => pickAndAnalyze(true)}
+            disabled={analyzing}
+          >
+            <CameraIcon size={20} color={BRIM.ink} />
+            <View>
+              <Text style={s.aiCardTitle}>사진 찍기</Text>
+              <Text style={s.aiCardSub}>AI가 자동 분석</Text>
+            </View>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.aiBtn} onPress={handleAnalyzePhoto} disabled={analyzing}>
-            <Text style={styles.aiBtnText}>🖼 앨범에서 선택</Text>
+          <TouchableOpacity
+            style={[s.aiCard, analyzing && s.aiCardDisabled]}
+            onPress={() => pickAndAnalyze(false)}
+            disabled={analyzing}
+          >
+            <ImageIcon size={20} color={BRIM.ink} />
+            <View>
+              <Text style={s.aiCardTitle}>앨범에서</Text>
+              <Text style={s.aiCardSub}>가지고 오기</Text>
+            </View>
           </TouchableOpacity>
         </View>
+
         {analyzing && (
-          <View style={styles.analyzingRow}>
-            <ActivityIndicator color="#FF6B35" />
-            <Text style={styles.analyzingText}>AI가 음식을 분석하는 중...</Text>
+          <View style={s.analyzingRow}>
+            <Spinner />
+            <Text style={s.analyzingText}>AI가 음식을 분석하는 중...</Text>
           </View>
         )}
 
-        {/* Entry list */}
+        {/* Entries list */}
+        <View style={s.entriesHeader}>
+          <Text style={s.entriesLabel}>등록된 음식 · {entries.length}</Text>
+        </View>
+
         {entries.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>아직 추가된 음식이 없어요.</Text>
-            <Text style={styles.emptyHint}>사진을 찍거나 아래에서 검색해보세요!</Text>
+          <View style={s.emptyBox}>
+            <Text style={s.emptyTitle}>아직 추가된 음식이 없어요</Text>
+            <Text style={s.emptySub}>사진으로 분석하거나 검색해서 추가하세요</Text>
           </View>
         ) : (
-          entries.map((entry: MealEntry, i: number) => (
-            <EntryCard key={i} entry={entry} onRemove={() => handleRemove(i)} />
-          ))
+          <View style={s.entriesList}>
+            {entries.map((entry, i) => (
+              <EntryCard key={i} entry={entry} onRemove={() => handleRemove(i)} />
+            ))}
+          </View>
         )}
       </ScrollView>
 
-      {/* Add food button */}
-      <View style={styles.footer}>
+      {/* Sticky footer CTA */}
+      <View style={[s.footer, { paddingBottom: insets.bottom + 12 }]}>
         <TouchableOpacity
-          style={styles.searchBtn}
+          style={s.searchBtn}
           onPress={() => navigation.navigate('FoodSearch', { slot, date })}
         >
-          <Text style={styles.searchBtnText}>음식 검색하여 추가</Text>
+          <SearchIcon size={16} color={BRIM.paper} />
+          <Text style={s.searchBtnText}>음식 검색하여 추가</Text>
         </TouchableOpacity>
       </View>
 
-      {/* AI Results Modal */}
       <AiResultsModal
         results={aiResults}
         loading={addingAi}
@@ -214,23 +240,61 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Entry card ────────────────────────────────────────────────────────────────
+
+function EntryCard({ entry, onRemove }: { entry: MealEntry; onRemove: () => void }) {
+  return (
+    <View style={s.entryCard}>
+      <View style={{ flex: 1 }}>
+        <Text style={s.entryName} numberOfLines={2}>{entry.food.name}</Text>
+        {entry.food.brand ? <Text style={s.entryBrand}>{entry.food.brand}</Text> : null}
+        <View style={s.entryChips}>
+          <Chip>{fmt(entry.grams)}g</Chip>
+          <Chip strong>{fmt(entry.calories)} kcal</Chip>
+          <Chip>P {fmtG(entry.protein)}g</Chip>
+        </View>
+      </View>
+      <TouchableOpacity onPress={onRemove} hitSlop={8} style={s.removeBtn}>
+        <Text style={s.removeText}>삭제</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function Chip({ children, strong }: { children: React.ReactNode; strong?: boolean }) {
+  return (
+    <View style={[s.chip, strong && s.chipStrong]}>
+      <Text style={[s.chipText, strong && s.chipTextStrong]}>{children}</Text>
+    </View>
+  );
+}
+
+function Spinner() {
+  const rot = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(rot, { toValue: 1, duration: 800, easing: Easing.linear, useNativeDriver: true }),
+    ).start();
+  }, [rot]);
+  const spin = rot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  return <Animated.View style={[s.spinner, { transform: [{ rotate: spin }] }]} />;
+}
+
+// ── AI results modal ──────────────────────────────────────────────────────────
 
 function AiResultsModal({
-  results,
-  loading,
-  onConfirm,
-  onDismiss,
+  results, loading, onConfirm, onDismiss,
 }: {
   results: AnalyzedFood[] | null;
   loading: boolean;
-  onConfirm: (selected: AnalyzedFood[]) => void;
+  onConfirm: (sel: AnalyzedFood[]) => void;
   onDismiss: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [checked, setChecked] = useState<boolean[]>([]);
 
   React.useEffect(() => {
-    if (results) setChecked(results.map(() => true));
+    if (results) setChecked(results.map((r) => r.confidence !== 'low'));
   }, [results]);
 
   if (!results) return null;
@@ -239,130 +303,197 @@ function AiResultsModal({
   const selected = results.filter((_, i) => checked[i]);
 
   return (
-    <Modal visible animationType="slide" transparent>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>AI 분석 결과</Text>
-          <Text style={styles.modalSub}>추가할 항목을 선택하세요</Text>
-          <ScrollView style={{ maxHeight: 360 }}>
+    <Modal visible animationType="slide" transparent statusBarTranslucent>
+      <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Pressable style={s.backdrop} onPress={onDismiss} />
+        <View style={[s.sheet, { paddingBottom: insets.bottom + 28 }]}>
+          <View style={s.dragHandle} />
+          <Text style={s.sheetTitle}>AI 분석 결과</Text>
+          <Text style={s.sheetSub}>추가할 항목을 선택하세요</Text>
+
+          <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
             {results.map((food, i) => (
-              <TouchableOpacity key={i} style={styles.aiItem} onPress={() => toggle(i)}>
-                <View style={[styles.checkbox, checked[i] && styles.checkboxOn]}>
-                  {checked[i] && <Text style={styles.checkmark}>✓</Text>}
+              <TouchableOpacity key={i} onPress={() => toggle(i)} style={s.aiItem}>
+                <View style={[s.checkbox, checked[i] && s.checkboxOn]}>
+                  {checked[i] && <CheckIcon size={12} color={BRIM.paper} />}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.aiItemName}>{food.name_ko || food.name}</Text>
-                  <Text style={styles.aiItemSub}>
-                    {food.estimated_grams}g · {food.per_100g.kcal?.toFixed(0)}kcal/100g ·{' '}
-                    단백질 {food.per_100g.protein_g?.toFixed(1)}g{' '}
-                    <Text style={{ color: CONF_COLOR[food.confidence], fontSize: 11 }}>
-                      {food.confidence === 'high' ? '확실' : food.confidence === 'medium' ? '보통' : '불확실'}
-                    </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={s.aiItemName} numberOfLines={1}>{food.name_ko || food.name}</Text>
+                    <ConfidenceBadge level={food.confidence} />
+                  </View>
+                  <Text style={s.aiItemSub}>
+                    {food.estimated_grams}g · {(food.per_100g.kcal ?? 0).toFixed(0)} kcal · P {(food.per_100g.protein_g ?? 0).toFixed(1)}g
                   </Text>
                 </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
-          <View style={styles.modalBtns}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onDismiss}>
-              <Text style={styles.cancelText}>취소</Text>
+
+          <View style={s.sheetBtns}>
+            <TouchableOpacity style={s.cancelBtn} onPress={onDismiss}>
+              <Text style={s.cancelText}>취소</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.confirmBtn, selected.length === 0 && styles.confirmBtnDisabled]}
+              style={[s.confirmBtn, selected.length === 0 && s.confirmBtnOff]}
               onPress={() => onConfirm(selected)}
               disabled={loading || selected.length === 0}
             >
-              <Text style={styles.confirmText}>
+              <Text style={[s.confirmText, selected.length === 0 && s.confirmTextOff]}>
                 {loading ? '추가 중...' : `${selected.length}개 추가`}
               </Text>
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
-function EntryCard({ entry, onRemove }: { entry: MealEntry; onRemove: () => void }) {
+function ConfidenceBadge({ level }: { level: AnalyzedFood['confidence'] }) {
+  const dots = level === 'high' ? 3 : level === 'medium' ? 2 : 1;
+  const label = level === 'high' ? '확실' : level === 'medium' ? '보통' : '불확실';
+  const isLow = level === 'low';
   return (
-    <View style={styles.entryCard}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.entryName} numberOfLines={2}>{entry.food.name}</Text>
-        {entry.food.brand && <Text style={styles.entryBrand}>{entry.food.brand}</Text>}
-        <View style={styles.entryMacros}>
-          <Text style={styles.macroText}>{entry.grams}g</Text>
-          <Text style={styles.macroText}>{entry.calories.toFixed(0)} kcal</Text>
-          <Text style={styles.macroText}>단백질 {entry.protein.toFixed(1)}g</Text>
-        </View>
+    <View style={[s.badge, isLow && s.badgeLow]}>
+      <View style={{ flexDirection: 'row', gap: 2 }}>
+        {[0, 1, 2].map((i) => (
+          <View key={i} style={[
+            s.badgeDot,
+            { backgroundColor: i < dots ? (isLow ? BRIM.danger : BRIM.ink) : BRIM.hair },
+          ]} />
+        ))}
       </View>
-      <TouchableOpacity onPress={onRemove} style={styles.removeBtn}>
-        <Text style={styles.removeText}>삭제</Text>
-      </TouchableOpacity>
+      <Text style={[s.badgeText, isLow && s.badgeTextLow]}>{label}</Text>
     </View>
   );
 }
 
-function MacroChip({ label, value, unit }: { label: string; value: string; unit: string }) {
-  return (
-    <View style={styles.macroChip}>
-      <Text style={styles.macroValue}>{value}</Text>
-      <Text style={styles.macroUnit}>{unit}</Text>
-      <Text style={styles.macroLabel}>{label}</Text>
-    </View>
-  );
-}
+// ── Styles ────────────────────────────────────────────────────────────────────
 
-const CONF_COLOR: Record<AnalyzedFood['confidence'], string> = {
-  high: '#4ECDC4',
-  medium: '#F7B731',
-  low: '#FF6B6B',
-};
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: BRIM.paper },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BRIM.paper },
+  loadingText: { fontFamily: F.med, fontSize: 14, color: BRIM.mute },
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
-  content: { padding: 16, paddingBottom: 100 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  summaryCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4 },
-  summaryTitle: { fontSize: 15, fontWeight: '700', marginBottom: 12 },
-  macroRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  macroChip: { alignItems: 'center' },
-  macroValue: { fontSize: 18, fontWeight: '700', color: '#333' },
-  macroUnit: { fontSize: 11, color: '#888' },
-  macroLabel: { fontSize: 11, color: '#555' },
-  aiRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  aiBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1.5, borderColor: '#FF6B35', elevation: 1 },
-  aiBtnText: { fontSize: 13, fontWeight: '600', color: '#FF6B35' },
-  analyzingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12, paddingHorizontal: 4 },
-  analyzingText: { fontSize: 13, color: '#FF6B35' },
-  emptyBox: { alignItems: 'center', paddingVertical: 32 },
-  emptyText: { fontSize: 15, color: '#999', marginBottom: 6 },
-  emptyHint: { fontSize: 13, color: '#bbb' },
-  entryCard: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4 },
-  entryName: { fontSize: 14, fontWeight: '600', color: '#222' },
-  entryBrand: { fontSize: 12, color: '#999', marginTop: 2 },
-  entryMacros: { flexDirection: 'row', gap: 10, marginTop: 6 },
-  macroText: { fontSize: 12, color: '#666' },
-  removeBtn: { justifyContent: 'center', paddingLeft: 12 },
-  removeText: { color: '#FF3B30', fontSize: 13, fontWeight: '600' },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee' },
-  searchBtn: { backgroundColor: '#4ECDC4', borderRadius: 12, padding: 16, alignItems: 'center' },
-  searchBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 10, paddingBottom: 14, gap: 8,
+  },
+  backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontFamily: F.bold, fontSize: 22, color: BRIM.ink, letterSpacing: -0.6 },
+
+  scroll: { paddingHorizontal: 20, paddingBottom: 120 },
+
+  totalsGrid: { flexDirection: 'row', gap: 6, paddingTop: 8, paddingBottom: 16 },
+  totalCell: {
+    flex: 1, padding: 10, backgroundColor: BRIM.card, borderRadius: 12,
+    borderWidth: 1, borderColor: BRIM.hair, gap: 2,
+  },
+  totalLabel: { fontFamily: F.semi, fontSize: 9, color: BRIM.mute, letterSpacing: 1, textTransform: 'uppercase' },
+  totalValue: { fontFamily: F.bold, fontSize: 17, color: BRIM.ink, letterSpacing: -0.5 },
+  totalUnit: { fontSize: 9, color: BRIM.mute, fontFamily: F.med },
+
+  aiGrid: { flexDirection: 'row', gap: 8, paddingBottom: 16 },
+  aiCard: {
+    flex: 1, flexDirection: 'column', alignItems: 'flex-start', gap: 8,
+    padding: 16, backgroundColor: BRIM.card, borderRadius: 16,
+    borderWidth: 1, borderColor: BRIM.hair,
+  },
+  aiCardDisabled: { opacity: 0.5 },
+  aiCardTitle: { fontFamily: F.bold, fontSize: 13, color: BRIM.ink },
+  aiCardSub: { fontFamily: F.med, fontSize: 11, color: BRIM.mute, marginTop: 2 },
+
+  analyzingRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 14, backgroundColor: BRIM.card, borderRadius: 14,
+    borderWidth: 1, borderColor: BRIM.hair, marginBottom: 16,
+  },
+  analyzingText: { fontFamily: F.med, fontSize: 13, color: BRIM.ink },
+  spinner: {
+    width: 16, height: 16, borderRadius: 8,
+    borderWidth: 2, borderColor: BRIM.hair, borderTopColor: BRIM.ink,
+  },
+
+  entriesHeader: { marginBottom: 8 },
+  entriesLabel: { fontFamily: F.semi, fontSize: 11, color: BRIM.mute, letterSpacing: 1, textTransform: 'uppercase' },
+  entriesList: { gap: 8 },
+  emptyBox: {
+    padding: 36, alignItems: 'center',
+    backgroundColor: BRIM.card, borderRadius: 16,
+    borderWidth: 1, borderColor: BRIM.hair, borderStyle: 'dashed',
+  },
+  emptyTitle: { fontFamily: F.semi, fontSize: 14, color: BRIM.ink, marginBottom: 4 },
+  emptySub: { fontFamily: F.med, fontSize: 12, color: BRIM.mute, textAlign: 'center' },
+
+  entryCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 14, backgroundColor: BRIM.card, borderRadius: 14,
+    borderWidth: 1, borderColor: BRIM.hair,
+  },
+  entryName: { fontFamily: F.semi, fontSize: 13, color: BRIM.ink, letterSpacing: -0.1 },
+  entryBrand: { fontFamily: F.med, fontSize: 11, color: BRIM.mute, marginTop: 1 },
+  entryChips: { flexDirection: 'row', gap: 4, marginTop: 6 },
+  chip: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
+  chipStrong: { backgroundColor: 'rgba(11,11,14,0.06)' },
+  chipText: { fontFamily: F.num, fontSize: 10, color: BRIM.mute },
+  chipTextStrong: { fontFamily: F.numSemi, fontSize: 10, color: BRIM.ink },
+  removeBtn: { paddingHorizontal: 8, paddingVertical: 6 },
+  removeText: { fontFamily: F.semi, fontSize: 12, color: BRIM.mute },
+
+  footer: {
+    paddingHorizontal: 20, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: BRIM.hair2,
+    backgroundColor: BRIM.paper,
+  },
+  searchBtn: {
+    backgroundColor: BRIM.ink, borderRadius: 16, padding: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+  },
+  searchBtnText: { fontFamily: F.bold, fontSize: 15, color: BRIM.paper, letterSpacing: -0.1 },
+
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
-  modalSub: { fontSize: 13, color: '#888', marginBottom: 16 },
-  aiItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#ddd', alignItems: 'center', justifyContent: 'center' },
-  checkboxOn: { backgroundColor: '#4ECDC4', borderColor: '#4ECDC4' },
-  checkmark: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  aiItemName: { fontSize: 15, fontWeight: '600', color: '#222', marginBottom: 2 },
-  aiItemSub: { fontSize: 12, color: '#888' },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(11,11,14,0.35)' },
+  sheet: {
+    backgroundColor: BRIM.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 24, paddingTop: 8,
+  },
+  dragHandle: { width: 36, height: 4, backgroundColor: BRIM.hair, borderRadius: 99, alignSelf: 'center', marginBottom: 16 },
+  sheetTitle: { fontFamily: F.bold, fontSize: 18, color: BRIM.ink, letterSpacing: -0.4 },
+  sheetSub: { fontFamily: F.med, fontSize: 12, color: BRIM.mute, marginTop: 2, marginBottom: 16 },
+  sheetBtns: { flexDirection: 'row', gap: 8, marginTop: 20 },
+  cancelBtn: {
+    flex: 1, padding: 16, borderRadius: 14,
+    borderWidth: 1, borderColor: BRIM.hair, alignItems: 'center',
+  },
+  cancelText: { fontFamily: F.semi, fontSize: 14, color: BRIM.ink },
+  confirmBtn: { flex: 2, padding: 16, borderRadius: 14, backgroundColor: BRIM.ink, alignItems: 'center' },
+  confirmBtnOff: { backgroundColor: BRIM.hair },
+  confirmText: { fontFamily: F.bold, fontSize: 14, color: BRIM.paper },
+  confirmTextOff: { color: BRIM.mute },
 
-  modalBtns: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  cancelBtn: { flex: 1, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
-  cancelText: { fontSize: 15, color: '#666' },
-  confirmBtn: { flex: 2, padding: 14, borderRadius: 12, backgroundColor: '#4ECDC4', alignItems: 'center' },
-  confirmBtnDisabled: { backgroundColor: '#ccc' },
-  confirmText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  aiItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: BRIM.hair2,
+  },
+  checkbox: {
+    width: 22, height: 22, borderRadius: 7,
+    borderWidth: 1.5, borderColor: BRIM.hair,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  checkboxOn: { backgroundColor: BRIM.ink, borderColor: BRIM.ink },
+  aiItemName: { fontFamily: F.semi, fontSize: 14, color: BRIM.ink, flex: 1 },
+  aiItemSub: { fontFamily: F.num, fontSize: 11, color: BRIM.mute, marginTop: 2 },
+
+  badge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 99,
+    backgroundColor: BRIM.hair2,
+  },
+  badgeLow: { backgroundColor: 'rgba(180,58,46,0.08)' },
+  badgeDot: { width: 3, height: 3, borderRadius: 99 },
+  badgeText: { fontFamily: F.semi, fontSize: 9, color: BRIM.mute, letterSpacing: 0.4, textTransform: 'uppercase' },
+  badgeTextLow: { color: BRIM.danger },
 });

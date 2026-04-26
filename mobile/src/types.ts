@@ -36,6 +36,7 @@ export interface DailyLog {
 }
 
 export type RootStackParamList = {
+  Onboarding: undefined;
   Home: undefined;
   MealRegister: { slot: MealSlot; date: string };
   FoodSearch: { slot: MealSlot; date: string };
