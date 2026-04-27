@@ -57,7 +57,6 @@ export async function putGoals(date: string, goals: DailyLog['goals']): Promise<
 
 export interface AnalyzedFood {
   name: string;
-  name_ko: string;
   estimated_grams: number;
   per_100g: {
     kcal: number;

@@ -103,7 +103,7 @@ export default function MealRegisterScreen({ navigation, route }: Props) {
         const entry: MealEntry = {
           food: {
             id: `ai_${Date.now()}_${Math.random()}`,
-            name: food.name_ko || food.name,
+            name: food.name,
             brand: null,
             category: null,
             upc: null,
@@ -319,7 +319,7 @@ function AiResultsModal({
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={s.aiItemName} numberOfLines={1}>{food.name_ko || food.name}</Text>
+                    <Text style={s.aiItemName} numberOfLines={1}>{food.name}</Text>
                     <ConfidenceBadge level={food.confidence} />
                   </View>
                   <Text style={s.aiItemSub}>

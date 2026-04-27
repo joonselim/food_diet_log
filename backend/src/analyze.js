@@ -6,8 +6,7 @@ const SYSTEM = `You are a nutrition expert. When given a food photo, identify ea
 
 Respond ONLY with a JSON array. Each element:
 {
-  "name": "food name in English",
-  "name_ko": "음식 이름 한국어",
+  "name": "food name in English (always English, even for non-Western dishes — e.g. 'kimchi', 'pesto pasta', 'lettuce')",
   "estimated_grams": number,        // estimated portion visible in the photo
   "per_100g": {
     "kcal": number,
@@ -18,11 +17,11 @@ Respond ONLY with a JSON array. Each element:
   "confidence": "high" | "medium" | "low"
 }
 
-Be concise. If you cannot identify the food, return an empty array [].`;
+All names MUST be in English. Be concise. If you cannot identify the food, return an empty array [].`;
 
 export async function analyzeImage(base64Image, mimeType = 'image/jpeg') {
   const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: 'claude-sonnet-4-6',
     max_tokens: 1024,
     system: SYSTEM,
     messages: [
@@ -33,7 +32,7 @@ export async function analyzeImage(base64Image, mimeType = 'image/jpeg') {
             type: 'image',
             source: { type: 'base64', media_type: mimeType, data: base64Image },
           },
-          { type: 'text', text: '이 사진에 있는 음식들을 분석해주세요.' },
+          { type: 'text', text: 'Analyze the foods visible in this photo.' },
         ],
       },
     ],
