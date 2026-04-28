@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -403,6 +404,22 @@ function GoalsModal({ visible, current, onSave, onDismiss }: {
                   ))}
                 </View>
               </View>
+
+              {/* Source citation (Apple Guideline 1.4.1 — health info must cite sources) */}
+              <TouchableOpacity
+                onPress={() =>
+                  Linking.openURL(
+                    'https://www.niddk.nih.gov/health-information/weight-management/body-weight-planner',
+                  )
+                }
+                style={s.citationRow}
+              >
+                <Text style={s.citationText}>
+                  Calorie estimates use the Mifflin-St Jeor equation, a standard formula
+                  referenced by the U.S. National Institutes of Health (NIH).{' '}
+                  <Text style={s.citationLink}>Learn more →</Text>
+                </Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <View style={s.goalFields}>
@@ -543,6 +560,11 @@ const s = StyleSheet.create({
   calcNum: { fontFamily: F.bold, fontSize: 20, color: BRIM.ink, letterSpacing: -0.5 },
   calcUnit: { fontFamily: F.med, fontSize: 10, color: BRIM.mute },
   calcLabel: { fontFamily: F.semi, fontSize: 10, color: BRIM.mute, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  // Source citation (Apple Guideline 1.4.1)
+  citationRow: { marginTop: 12, paddingHorizontal: 4 },
+  citationText: { fontFamily: F.med, fontSize: 11, color: BRIM.mute, lineHeight: 16, textAlign: 'center' },
+  citationLink: { fontFamily: F.semi, color: BRIM.ink, textDecorationLine: 'underline' },
 
   // Manual entry
   goalFields: { gap: 12 },
