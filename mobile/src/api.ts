@@ -1,9 +1,38 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { DailyLog, FoodItem, MealEntry, MealSlot } from './types';
 
 // Configured in app.json extra.apiBase
 // iOS Simulator: localhost, Android Emulator: 10.0.2.2, Real device: Mac LAN IP
 const BASE: string = Constants.expoConfig?.extra?.apiBase ?? 'http://localhost:4000';
+
+// ── Device identity ───────────────────────────────────────────────────────────
+// Anonymous, per-install device ID. Survives app updates, wiped on uninstall
+// (iOS clears AsyncStorage with the app sandbox), so reinstall = clean slate.
+// Sent on every meal API request so two devices don't share the same daily log.
+
+const DEVICE_ID_KEY = 'device_id';
+let cachedDeviceId: string | null = null;
+
+function genDeviceId(): string {
+  const r = () => Math.random().toString(36).slice(2);
+  return 'dev_' + r() + r() + Date.now().toString(36);
+}
+
+async function getDeviceId(): Promise<string> {
+  if (cachedDeviceId) return cachedDeviceId;
+  let id = await AsyncStorage.getItem(DEVICE_ID_KEY);
+  if (!id) {
+    id = genDeviceId();
+    await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+  }
+  cachedDeviceId = id;
+  return id;
+}
+
+async function mealHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
+  return { 'x-device-id': await getDeviceId(), ...(extra ?? {}) };
+}
 
 // ── Food search ───────────────────────────────────────────────────────────────
 
@@ -23,7 +52,7 @@ export async function searchFoods(q: string, limit = 20, offset = 0): Promise<Se
 // ── Meal log ──────────────────────────────────────────────────────────────────
 
 export async function fetchLog(date: string): Promise<DailyLog> {
-  const res = await fetch(`${BASE}/meals/${date}`);
+  const res = await fetch(`${BASE}/meals/${date}`, { headers: await mealHeaders() });
   if (!res.ok) throw new Error(`fetchLog failed: ${res.status}`);
   return res.json();
 }
@@ -31,7 +60,7 @@ export async function fetchLog(date: string): Promise<DailyLog> {
 export async function postEntry(date: string, slot: MealSlot, entry: MealEntry): Promise<DailyLog> {
   const res = await fetch(`${BASE}/meals/${date}/${slot}/entries`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await mealHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(entry),
   });
   if (!res.ok) throw new Error(`postEntry failed: ${res.status}`);
@@ -39,7 +68,10 @@ export async function postEntry(date: string, slot: MealSlot, entry: MealEntry):
 }
 
 export async function deleteEntry(date: string, slot: MealSlot, index: number): Promise<DailyLog> {
-  const res = await fetch(`${BASE}/meals/${date}/${slot}/entries/${index}`, { method: 'DELETE' });
+  const res = await fetch(`${BASE}/meals/${date}/${slot}/entries/${index}`, {
+    method: 'DELETE',
+    headers: await mealHeaders(),
+  });
   if (!res.ok) throw new Error(`deleteEntry failed: ${res.status}`);
   return res.json();
 }
@@ -47,7 +79,7 @@ export async function deleteEntry(date: string, slot: MealSlot, index: number): 
 export async function putGoals(date: string, goals: DailyLog['goals']): Promise<void> {
   const res = await fetch(`${BASE}/meals/${date}/goals`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await mealHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(goals),
   });
   if (!res.ok) throw new Error(`putGoals failed: ${res.status}`);

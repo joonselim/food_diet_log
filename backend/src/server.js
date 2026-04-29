@@ -8,7 +8,7 @@ import { analyzeImage } from "./analyze.js";
 
 const PORT = Number(process.env.PORT || 4000);
 const app = express();
-app.use(cors());
+app.use(cors({ allowedHeaders: ["Content-Type", "x-device-id"] }));
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -120,12 +120,24 @@ app.get("/foods/:id", async (req, res, next) => {
 
 // ── Meal log routes ──────────────────────────────────────────────────────────
 
-// GET /meals/:date — get daily log (YYYY-MM-DD)
+// Every /meals route requires the x-device-id header. Without it, two users
+// sharing the same backend would write to the same daily log document.
+function getDeviceId(req, res) {
+  const id = req.header("x-device-id");
+  if (!id || typeof id !== "string" || id.length < 4 || id.length > 128) {
+    res.status(400).json({ error: "x-device-id header required" });
+    return null;
+  }
+  return id;
+}
+
+// GET /meals/:date — get daily log (YYYY-MM-DD) for this device
 app.get("/meals/:date", async (req, res, next) => {
   try {
+    const deviceId = getDeviceId(req, res); if (!deviceId) return;
     const { date } = req.params;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: "invalid date" });
-    const log = await getLog(date);
+    const log = await getLog(date, deviceId);
     res.json(log);
   } catch (e) { next(e); }
 });
@@ -133,12 +145,13 @@ app.get("/meals/:date", async (req, res, next) => {
 // POST /meals/:date/:slot/entries — add entry to a meal slot
 app.post("/meals/:date/:slot/entries", async (req, res, next) => {
   try {
+    const deviceId = getDeviceId(req, res); if (!deviceId) return;
     const { date, slot } = req.params;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: "invalid date" });
     if (!["breakfast", "lunch", "dinner"].includes(slot)) return res.status(400).json({ error: "invalid slot" });
     const entry = req.body;
     if (!entry?.food || typeof entry.grams !== "number") return res.status(400).json({ error: "invalid entry" });
-    const log = await addEntry(date, slot, entry);
+    const log = await addEntry(date, slot, entry, deviceId);
     res.json(log);
   } catch (e) { next(e); }
 });
@@ -146,12 +159,13 @@ app.post("/meals/:date/:slot/entries", async (req, res, next) => {
 // DELETE /meals/:date/:slot/entries/:index — remove entry by index
 app.delete("/meals/:date/:slot/entries/:index", async (req, res, next) => {
   try {
+    const deviceId = getDeviceId(req, res); if (!deviceId) return;
     const { date, slot } = req.params;
     const index = parseInt(req.params.index, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: "invalid date" });
     if (!["breakfast", "lunch", "dinner"].includes(slot)) return res.status(400).json({ error: "invalid slot" });
     if (!Number.isFinite(index) || index < 0) return res.status(400).json({ error: "invalid index" });
-    const log = await removeEntry(date, slot, index);
+    const log = await removeEntry(date, slot, index, deviceId);
     res.json(log);
   } catch (e) { next(e); }
 });
@@ -159,13 +173,14 @@ app.delete("/meals/:date/:slot/entries/:index", async (req, res, next) => {
 // PUT /meals/:date/goals — update daily goals
 app.put("/meals/:date/goals", async (req, res, next) => {
   try {
+    const deviceId = getDeviceId(req, res); if (!deviceId) return;
     const { date } = req.params;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: "invalid date" });
     const { calories, protein, carbs, fat } = req.body;
     if ([calories, protein, carbs, fat].some((v) => typeof v !== "number")) {
       return res.status(400).json({ error: "all goal fields must be numbers" });
     }
-    await updateGoals(date, { calories, protein, carbs, fat });
+    await updateGoals(date, { calories, protein, carbs, fat }, deviceId);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
