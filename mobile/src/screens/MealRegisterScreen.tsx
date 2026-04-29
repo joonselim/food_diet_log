@@ -330,6 +330,10 @@ function AiResultsModal({
             ))}
           </ScrollView>
 
+          <Text style={s.aiDisclaimer}>
+            AI can make mistakes. Review before adding.
+          </Text>
+
           <View style={s.sheetBtns}>
             <TouchableOpacity style={s.cancelBtn} onPress={onDismiss}>
               <Text style={s.cancelText}>Cancel</Text>
@@ -462,7 +466,11 @@ const s = StyleSheet.create({
   dragHandle: { width: 36, height: 4, backgroundColor: BRIM.hair, borderRadius: 99, alignSelf: 'center', marginBottom: 16 },
   sheetTitle: { fontFamily: F.bold, fontSize: 18, color: BRIM.ink, letterSpacing: -0.4 },
   sheetSub: { fontFamily: F.med, fontSize: 12, color: BRIM.mute, marginTop: 2, marginBottom: 16 },
-  sheetBtns: { flexDirection: 'row', gap: 8, marginTop: 20 },
+  aiDisclaimer: {
+    fontFamily: F.med, fontSize: 11, color: BRIM.mute,
+    textAlign: 'center', marginTop: 12, paddingHorizontal: 4,
+  },
+  sheetBtns: { flexDirection: 'row', gap: 8, marginTop: 12 },
   cancelBtn: {
     flex: 1, padding: 16, borderRadius: 14,
     borderWidth: 1, borderColor: BRIM.hair, alignItems: 'center',
