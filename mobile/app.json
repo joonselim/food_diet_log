@@ -18,8 +18,8 @@
       "buildNumber": "2",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Calorie Bear uses your camera to capture meal photos. The photo is sent to our AI service to identify foods (e.g. \"pesto pasta\", \"lettuce\") and estimate calories, protein, carbs, and fat — so you can log a meal in one tap instead of typing it out.",
-        "NSPhotoLibraryUsageDescription": "Calorie Bear lets you pick existing meal photos from your library. The selected photo is sent to our AI service to identify foods and estimate nutrition (calories, protein, carbs, fat), so you can log past meals without re-typing them."
+        "NSCameraUsageDescription": "Calorie Bear uses your camera to take meal photos. The photo is sent to our AI service to identify foods (e.g. \"pesto pasta\", \"lettuce\") and estimate calories, protein, carbs, and fat — so you can log a meal in one tap instead of typing it out. AI estimates may be inaccurate, and photos are not stored on our servers.",
+        "NSPhotoLibraryUsageDescription": "Calorie Bear lets you pick existing meal photos from your library. The selected photo is sent to our AI service to identify foods and estimate nutrition (calories, protein, carbs, fat), so you can log past meals without re-typing them. AI estimates may be inaccurate, and photos are not stored on our servers."
       }
     },
     "android": {
